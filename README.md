@@ -1,15 +1,58 @@
-# DANFSe Service
+<p align="center">
+  <img src="docs/img/banner.svg" alt="Gerador de DANFSE: gere o DANFSE em PDF a partir do XML da NFS-e" width="100%">
+</p>
 
-Serviço HTTP em Go para gerar o DANFSe em PDF a partir do XML de uma NFS-e.
+<p align="center">
+  <a href="https://github.com/nathanramorim/calculadora-rtc-gerador-danfse/tags"><img alt="versão" src="https://img.shields.io/github/v/tag/nathanramorim/calculadora-rtc-gerador-danfse?label=vers%C3%A3o&color=2563eb"></a>
+  <img alt="licença" src="https://img.shields.io/badge/licen%C3%A7a-MIT-16a34a">
+  <img alt="Go 1.27" src="https://img.shields.io/badge/Go-1.27-2563eb">
+  <img alt="WebAssembly" src="https://img.shields.io/badge/WebAssembly-dispon%C3%ADvel-16a34a">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-imagem-2563eb">
+</p>
 
-## Pré-requisitos
+<h3 align="center">Gere o DANFSE em PDF<br>a partir do XML da NFS-e</h3>
 
-- Go 1.27+
-- [Task](https://taskfile.dev/) — opcional, mas recomendado
+---
 
-## Executar
+## O que é
 
-Com Task:
+O Gerador de DANFSE é um serviço que recebe o XML de uma NFS-e (Nota Fiscal de Serviço eletrônica) e devolve o DANFSE em PDF, que é a versão para leitura e impressão da nota. Ele segue as especificações do padrão nacional da NFS-e.
+
+Funciona de duas formas, com a mesma lógica: como serviço HTTP e como WebAssembly, para rodar no navegador. É mantido pela Receita Federal do Brasil, com o SERPRO.
+
+## Por que usar
+
+| | |
+|---|---|
+| **Um passo só** | Você envia o XML e recebe o PDF. |
+| **Sem navegador nem HTML** | O PDF é desenhado direto pelo serviço. |
+| **Dois jeitos de usar** | Servidor HTTP ou WebAssembly, com o mesmo resultado. |
+| **Situação e canhoto** | Marca a nota como válida, substituída ou cancelada, e mostra ou oculta o canhoto. |
+| **Entrada protegida** | Limite de tamanho do XML e rejeição de DTD e entidades. |
+| **Pronto para operar** | Logs em JSON, verificação de saúde e telemetria opcional (OpenTelemetry). |
+
+## Antes de começar
+
+- **Go 1.27 ou mais novo**. Confira com `go version`.
+- [Task](https://taskfile.dev/): opcional, mas recomendado.
+- **Docker**, só se quiser rodar em contêiner.
+
+## Instalação
+
+```bash
+git clone https://github.com/nathanramorim/calculadora-rtc-gerador-danfse.git
+cd calculadora-rtc-gerador-danfse
+```
+
+Para gerar a imagem Docker (na raiz do projeto):
+
+```bash
+docker build -t danfse-go .
+```
+
+## Como usar
+
+Inicie o servidor. Com Task:
 
 ```bash
 task run
@@ -21,167 +64,9 @@ Sem Task:
 go run ./cmd/danfse
 ```
 
-Por padrão, o servidor inicia na porta `8080`. Para usar outra porta:
+Ele usa a porta `8080`. Para outra porta: `SERVER_PORT=8081 go run ./cmd/danfse`. Em contêiner: `docker run -p 8080:8080 danfse-go:latest`.
 
-```bash
-SERVER_PORT=8081 go run ./cmd/danfse
-```
-
-Também é possível definir `SERVER_PORT` em um arquivo `.env`, que é carregado
-automaticamente pelo Taskfile.
-
-## Docker
-Gerar imagem local, execute na raiz do projeto:
-```bash
-docker build -t danfse-go .
-```
-
-Rodar o container localmente:
-```bash
-docker run -p 8080:8080 danfse-go:latest
-```
-
-## Configuração
-
-Variáveis de ambiente suportadas:
-
-| Variável | Padrão | Descrição |
-| --- | --- | --- |
-| `SERVER_PORT` | `8080` | Porta HTTP do servidor. |
-| `LOG_LEVEL` | `info` | Nível mínimo de log (JSON em stderr). Valores: `debug`, `info`, `warn`, `error` (case-insensitive). Valor inválido rejeita a inicialização. |
-| `XML_MAX_SIZE_BYTES` | `5242880` | Limite máximo (em bytes) do XML de entrada, aplicado tanto ao limite de corpo HTTP quanto à validação interna do XML (antes e depois da sanitização do `&`). Valores zero, negativos, não numéricos ou acima do teto de `33554432` (32 MiB) rejeitam a inicialização. |
-
-```bash
-XML_MAX_SIZE_BYTES=1048576 go run ./cmd/danfse
-```
-
-> **Telemetria (OTel):** a inicialização do SDK é **opt-in** e controlada
-> exclusivamente pelas variáveis `OTEL_*` (ver [Tracing (OTLP)](#tracing-otlp-opt-in)).
-> Não há variável própria de telemetria — com `OTEL_SDK_DISABLED=true` (padrão),
-> o runtime é um pass-through no-op.
-
-## Logs (JSON em stderr)
-
-O serviço emite logs estruturados **JSON em stderr** (stdout fica reservado ao
-processo), um único registro por requisição com o evento `request_completed`,
-gerado pelo **RequestLogger nativo do Echo** (sem middleware próprio de
-logging/status/timer):
-
-```json
-{
-  "time": "2026-10-09T17:00:22.987471-03:00",
-  "level": "INFO",
-  "msg": "request_completed",
-  "timestamp": "2026-10-09T20:00:22.987471Z",
-  "event": "request_completed",
-  "request_id": "43cc0078e1038f585eafcaf15f862d93",
-  "method": "POST",
-  "route": "/api/danfse",
-  "status": 200,
-  "duration": 21816
-}
-```
-
-Campos relevantes:
-
-- `request_id` — identifica a requisição e é **sempre gerado pelo servidor**:
-  o header `X-Request-ID` enviado pelo cliente é descartado antes do middleware
-  (um ID externo não é confiável — pode carregar chars inválidos ou conteúdo
-  fiscal) e **nunca é ecoado nem propagado**. O cabeçalho de resposta
-  `X-Request-ID` traz sempre um identificador novo (32 chars alfanuméricos
-  aleatórios).
-- `route` — rota registrada (ex.: `/api/danfse`); requisições sem rota usam o
-  valor constante `"unmatched"`.
-- `trace_id` / `span_id` — presentes quando o OTLP está habilitado.
-- `error_type` — código estável de erro: `aborted`, `panic`, `http_error` ou
-  `internal`.
-- `kind: "probe"` — marcado nos health checks; probes de `/health/*` são
-  logados em nível `debug` (não poluem o `info`).
-
-**Nunca são logados**: corpo do XML, PDF, querystring, IDs fiscais ou headers de
-autenticação. Respostas `5xx` são sempre genéricas e não revelam `err.Error()`.
-O nível mínimo de log é controlado por `LOG_LEVEL` (ver
-[Configuração](#configuração)).
-
-No Docker, os logs ficam em stderr e podem ser consultados normalmente:
-
-```bash
-docker logs -f <container>
-journalctl -u danfse-service -f   # systemd
-```
-
-O campo `msg` do JSON é sempre o evento; para filtros por correlação use
-`request_id`.
-
-## Health Checks / ciclo de vida
-
-| Rota | Comportamento |
-| --- | --- |
-| `GET /health/live` | `200` com `{"status":"ok"}` enquanto o processo estiver de pé. |
-| `GET /health/ready` | `200` com `{"status":"ok"}` quando pronto; `503` com `{"status":"unavailable"}` durante o graceful shutdown. |
-
-Durante o graceful shutdown, o serviço marca o estado como **não pronto**
-**ANTES** de aguardar as requisições em andamento, para que balanceadores de
-carga parem de encaminhar tráfego antes do `Shutdown` HTTP. Útil como
-`readinessProbe` em Kubernetes/ECS e como healthcheck do load balancer.
-
-Os endpoints de health são documentados no Swagger sob a tag `Health`.
-
-## Tracing (OTLP, opt-in)
-
-A telemetria segue o padrão OpenTelemetry e é desligada por padrão. Para
-habilitar:
-
-| Variável | Padrão | Descrição |
-| --- | --- | --- |
-| `OTEL_SDK_DISABLED` | `true` | `false` habilita o SDK; `true` mantém providers no-op, sem exportadores nem conexões ao Collector. |
-| `OTEL_SERVICE_NAME` | `danfse-service` | Nome do serviço nos spans. |
-| `OTEL_TRACES_EXPORTER` | `otlp` | Quando habilitado: `otlp` exporta traces; `none` não exporta. |
-| `OTEL_METRICS_EXPORTER` | `otlp` | Quando habilitado: `otlp` exporta métricas; `none` não exporta. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | URL base do Collector OTLP HTTP/protobuf; os exporters acrescentam `/v1/traces` e `/v1/metrics`. |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | endpoint base + `/v1/traces` | URL completa opcional para traces. |
-| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | endpoint base + `/v1/metrics` | URL completa opcional para métricas. |
-| `OTEL_EXPORTER_OTLP_HEADERS` | `-` | Headers separados por vírgula, ex.: `Authorization=Bearer xyz`. |
-| `OTEL_EXPORTER_OTLP_TIMEOUT` | `10000` | Timeout (ms) de cada export. |
-
-Exemplo:
-
-```bash
-OTEL_SDK_DISABLED=false \
-OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 \
-OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer token" \
-go run ./cmd/danfse
-```
-
-Comportamento:
-
-- O transporte implementado é **OTLP HTTP/protobuf**, não gRPC. O Collector e
-  o backend de armazenamento/visualização são responsabilidade de quem hospeda
-  a aplicação. Logs JSON continuam em stderr; não são exportados via OTLP.
-- **Configuração OTel explícita inválida falha o startup** (fail-fast): com
-  `OTEL_SDK_DISABLED=false` e variáveis `OTEL_*` malformadas, o processo inicia
-  e sai com erro (mensagem segura, sem ecoar URLs/credenciais do endpoint).
-- Falhas de **export** são assíncronas e **não despacham erros ao responder a
-  requisição** nem derrubam o processo; ao encerrar, são reportadas em log de
-  nível `warn` com mensagem segura.
-- Os probes `/health/live` e `/health/ready` são excluídos dos spans/telemetria.
-- Span context propagado pelo HTTP é usado para preencher `trace_id`/`span_id`
-  no log de conclusão quando presente.
-
-## Nota sobre classificação de erros (`4xx` vs `5xx`)
-
-O endpoint avalia o XML e retorna `400` com mensagem voltada ao cliente para
-entradas inválidas detectadas pelo serviço (ex.: XML com erros estruturais,
-`stc` inválido). **Classificação fina entre `400` e `5xx`** do serviço de
-geração está na fila de melhorias como follow-up — hoje erros internos do
-serviço também são mapeados para `400`; a intenção é tratar falhas de
-infraestrutura/processamento como `5xx` (com corpo genérico) sem quebrar o
-contrato atual do cliente.
-
-
-## Gerar um PDF
-
-Com o servidor em execução:
+Com o servidor em execução, gere um PDF:
 
 ```bash
 curl -X POST "http://localhost:8080/api/danfse" \
@@ -190,12 +75,10 @@ curl -X POST "http://localhost:8080/api/danfse" \
   -o danfse.pdf
 ```
 
-O endpoint aceita os seguintes parâmetros opcionais:
+Parâmetros opcionais:
 
-- `stc`: situação da nota — `0` válida, `1` substituída ou `2` cancelada;
-- `canhoto`: `true` por padrão; use `false` para ocultar o canhoto.
-
-Exemplo sem canhoto:
+- `stc`: situação da nota. `0` válida, `1` substituída, `2` cancelada.
+- `canhoto`: `true` por padrão. Use `false` para ocultar o canhoto.
 
 ```bash
 curl -X POST "http://localhost:8080/api/danfse?canhoto=false" \
@@ -204,63 +87,47 @@ curl -X POST "http://localhost:8080/api/danfse?canhoto=false" \
   -o danfse.pdf
 ```
 
-O XML enviado tem, por padrão, no máximo 5 MiB; no servidor HTTP, o limite é
-configurável pela variável `XML_MAX_SIZE_BYTES` (ver [Configuração](#configuração)).
-O WASM mantém o padrão compartilhado de 5 MiB.
+A documentação interativa (Swagger) fica em <http://localhost:8080/api/swagger-ui/index.html>.
 
-## Testes
+### Configuração
 
-```bash
-task check
-```
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `SERVER_PORT` | `8080` | Porta do servidor. |
+| `LOG_LEVEL` | `info` | Nível de log: `debug`, `info`, `warn` ou `error`. |
+| `XML_MAX_SIZE_BYTES` | `5242880` | Tamanho máximo do XML (5 MiB). O teto é 32 MiB. Valor inválido impede o início. |
+| `OTEL_SDK_DISABLED` | `true` | Use `false` para ligar a telemetria (traces e métricas OTLP). |
 
-Executa `go fmt` e `go vet`. Para rodar os testes separadamente:
+As demais variáveis `OTEL_*` e os detalhes de logs, verificação de saúde (`/health/live` e `/health/ready`) e telemetria estão no [README anterior](README.antigo.md).
 
-```bash
-task test
-```
-
-Ou diretamente:
+### Testes e build
 
 ```bash
-go test -race -count=1 ./...
+task check      # go fmt e go vet
+task test       # go test -race -count=1 ./...
+task coverage   # cobertura e relatório coverage.html
+task build      # binário em bin/danfse-service
 ```
 
-Para executar a suíte, mostrar a cobertura de statements por função e gerar o
-relatório HTML local (`coverage.html`):
+## Segurança e privacidade
 
-```bash
-task coverage
-```
+- O serviço rejeita XML com DTD ou entidades e limita o tamanho da entrada.
+- Os logs nunca guardam o XML, o PDF, a querystring, identificadores fiscais nem cabeçalhos de autenticação.
+- Erros internos (`5xx`) respondem com mensagem genérica.
+- Para relatar uma falha de segurança, veja [SECURITY.md](SECURITY.md).
 
-Abra `coverage.html` no navegador para inspecionar a cobertura. O perfil
-`coverage.out` e o relatório HTML são artefatos locais e não são versionados.
+## Versões
 
-## Build
+| Versão | Novidades |
+|---|---|
+| 1.0.0 | Primeira versão: geração do DANFSE em PDF a partir do XML da NFS-e, por HTTP e por WebAssembly. |
 
-```bash
-task build
-```
+O [CHANGELOG](CHANGELOG.md) ainda não registra a 1.0.0.
 
-O binário será gerado em `bin/danfse-service`.
+## Para quem quer contribuir
 
-Para gerar a imagem Docker:
+Sugestões e relatos de erro entram pelos canais do repositório. Veja o [guia de contribuição](CONTRIBUTING.md) e a [governança](GOVERNANCE.md).
 
-```bash
-task docker
-```
+## Licença
 
-## Swagger
-
-Com o servidor em execução, a documentação está disponível em:
-
-<http://localhost:8080/api/swagger-ui/index.html>
-
-A spec usa `basePath` `/` com paths absolutos: o endpoint de negócio
-`/api/danfse` e os probes `/health/live` e `/health/ready`.
-
-Para regenerar os arquivos do Swagger:
-
-```bash
-task swagger
-```
+[MIT](LICENSE)
