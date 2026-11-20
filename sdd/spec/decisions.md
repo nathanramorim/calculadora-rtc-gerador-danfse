@@ -22,3 +22,4 @@ Os ADRs do projeto vivem em `docs/adr/` (fonte única, todos `Aceito`). As decis
 | D9 | O README diz que erros internos do serviço de geração também viram `400`, e que a separação entre `400` e `5xx` está na fila de melhorias. Falta decidir prazo e contrato. |
 | D10 | O `CHANGELOG.md` tem só `[Unreleased]`, mas existe a tag `1.0.0`. Registrar a 1.0.0 no changelog. |
 | D11 | O limite de XML do HTTP é configurável (`XML_MAX_SIZE_BYTES`, até 32 MiB), mas o WASM mantém 5 MiB fixos. Confirmar se a diferença é intencional. |
+| D12 | `TestRun_BindFalhaRetornaErroSemHang` (`cmd/danfse`) trava até o limite de tempo no macOS: o teste ocupa a porta só em `127.0.0.1` e o servidor sobe mesmo assim. Causa provável (não confirmada no código): o servidor escuta em todas as interfaces; no Linux, onde o CI roda, o teste passa. Medido em `go test -race`: os demais pacotes passaram; `go vet` e a cobertura de 70% não foram rodados. |
